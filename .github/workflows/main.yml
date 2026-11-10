@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       verify_email:
-        description: 'Verify delivery with up to 3 papers (send a status email if empty)'
+        description: 'Send a clearly labeled delivery test without fetching or summarizing papers'
         type: boolean
         default: false
   schedule:
@@ -46,7 +46,7 @@ jobs:
           LANGUAGE: ${{ vars.LANGUAGE }}
         run: |
           if [ "$VERIFY_EMAIL" = "true" ]; then
-            uv run main.py --max_paper_num 3 --send_empty true
+            python verify_email.py
           else
             uv run main.py
           fi
