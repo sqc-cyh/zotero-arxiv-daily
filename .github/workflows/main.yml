@@ -1,8 +1,14 @@
 name: Send emails daily
 on:
   workflow_dispatch:
+    inputs:
+      verify_email:
+        description: 'Verify delivery with up to 3 papers (send a status email if empty)'
+        type: boolean
+        default: false
   schedule:
-    - cron: '0 22 * * *'
+    # 06:17 China time; avoid the busy top of the hour.
+    - cron: '17 22 * * *'
 
 jobs:
   calculate-and-send:
@@ -21,6 +27,7 @@ jobs:
 
       - name: Run script
         env:
+          VERIFY_EMAIL: ${{ inputs.verify_email }}
           ZOTERO_ID: ${{ secrets.ZOTERO_ID }}
           ZOTERO_KEY: ${{ secrets.ZOTERO_KEY }}
           ZOTERO_IGNORE: ${{ vars.ZOTERO_IGNORE }}
@@ -38,4 +45,8 @@ jobs:
           MODEL_NAME: ${{ secrets.MODEL_NAME }}
           LANGUAGE: ${{ vars.LANGUAGE }}
         run: |
-          uv run main.py
+          if [ "$VERIFY_EMAIL" = "true" ]; then
+            uv run main.py --max_paper_num 3 --send_empty true
+          else
+            uv run main.py
+          fi

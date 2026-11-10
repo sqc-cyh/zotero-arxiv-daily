@@ -63,11 +63,18 @@ def filter_corpus(corpus:list[dict], pattern:str) -> list[dict]:
 def get_arxiv_paper(query:str, debug:bool=False) -> list[ArxivPaper]:
     client = arxiv.Client(num_retries=10,delay_seconds=10)
     feed = feedparser.parse(f"https://rss.arxiv.org/atom/{query}")
+    status = feed.get('status')
+    if status is not None and status != 200:
+        raise RuntimeError(f"arXiv feed request failed with HTTP {status}.")
+    if feed.get('bozo') or not feed.feed.get('title'):
+        raise RuntimeError("arXiv returned an invalid feed; this is not a no-papers day.")
+    logger.info(f"arXiv feed entries: {len(feed.entries)}.")
     if 'Feed error for query' in feed.feed.title:
         raise Exception(f"Invalid ARXIV_QUERY: {query}.")
     if not debug:
         papers = []
         all_paper_ids = [i.id.removeprefix("oai:arXiv.org:") for i in feed.entries if i.arxiv_announce_type == 'new']
+        logger.info(f"New paper entries: {len(all_paper_ids)}.")
         bar = tqdm(total=len(all_paper_ids),desc="Retrieving Arxiv papers")
         for i in range(0,len(all_paper_ids),20):
             search = arxiv.Search(id_list=all_paper_ids[i:i+20])
@@ -180,6 +187,10 @@ if __name__ == '__main__':
     if len(papers) == 0:
         logger.info("No new papers found. Yesterday maybe a holiday and no one submit their work :). If this is not the case, please check the ARXIV_QUERY.")
         if not args.send_empty:
+          logger.warning("No email sent: no new papers and SEND_EMPTY is false.")
+          if summary_path := os.environ.get("GITHUB_STEP_SUMMARY"):
+              with open(summary_path, "a") as summary:
+                  summary.write("No email sent: the feed contained no new papers and SEND_EMPTY is false.\n")
           exit(0)
     else:
         logger.info("Reranking papers...")
@@ -198,3 +209,7 @@ if __name__ == '__main__':
     send_email(args.sender, args.receiver, args.sender_password, args.smtp_server, args.smtp_port, html)
     logger.success("Email sent successfully! If you don't receive the email, please check the configuration and the junk box.")
 
+
+    if summary_path := os.environ.get("GITHUB_STEP_SUMMARY"):
+        with open(summary_path, "a") as summary:
+            summary.write(f"SMTP accepted the email containing {len(papers)} recommended papers. Inbox delivery is not independently verified.\n")
